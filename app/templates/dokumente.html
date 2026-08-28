@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% from "_macros.html" import sort_th, status_badge, confidence_badge %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Dokumentenzuordnung</h1>
+    <p class="page-subtitle">Offene und bestätigte Belege Aufträgen zuordnen.</p>
+  </div>
+  <div class="header-actions">
+    <form method="post" action="/zuordnung/erneut">
+      <input type="hidden" name="next" value="/dokumente">
+      <button class="btn btn-secondary" type="submit">Zuordnung erneut ausführen</button>
+    </form>
+    <div class="open-count-badge">{{ open_count }} offene Prüfung{{ "en" if open_count != 1 else "" }}</div>
+  </div>
+</div>
+
+{% if notice == "started" %}
+<div class="banner banner--success">Zuordnungsdurchlauf gestartet. Offene Belege werden neu gelesen und abgeglichen.</div>
+{% elif notice == "busy" %}
+<div class="banner banner--warning">Ein Durchlauf läuft bereits. Bitte kurz warten und die Seite neu laden.</div>
+{% endif %}
+{% if warning %}
+<div class="banner banner--warning">{{ warning }}</div>
+{% endif %}
+{% if error %}
+<div class="banner banner--danger">{{ error }}</div>
+{% endif %}
+
+<div class="toolbar">
+  <div class="filter-pills">
+    <a class="pill {{ 'is-active' if not status_filter else '' }}" href="/dokumente">Dokumente</a>
+    <a class="pill {{ 'is-active' if status_filter == 'bestaetigt' else '' }}" href="/dokumente?status=bestaetigt">Zugeordnet</a>
+    <a class="pill {{ 'is-active' if status_filter == 'pruefung' else '' }}" href="/dokumente?status=pruefung">Prüfung erforderlich</a>
+    <a class="pill {{ 'is-active' if status_filter == 'nicht_zuordenbar' else '' }}" href="/dokumente?status=nicht_zuordenbar">Keine Zuordnung</a>
+  </div>
+</div>
+
+<form class="filters-form" method="get">
+  {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
+  <input type="search" name="q" value="{{ search_query or '' }}" placeholder="Dokument, Lieferant oder Auftrag suchen">
+  <input type="date" name="von" value="{{ von }}">
+  <span class="date-sep">bis</span>
+  <input type="date" name="bis" value="{{ bis }}">
+  <button class="btn btn-primary btn-small" type="submit">Filtern</button>
+  {% if search_query or von or bis %}
+  <a class="btn btn-secondary btn-small" href="/dokumente{{ '?status=' + status_filter if status_filter else '' }}">Zurücksetzen</a>
+  {% endif %}
+</form>
+
+<section class="card">
+  <div class="table-scroll">
+    <table class="data-table data-table--fit">
+      <thead>
+        <tr>
+          {{ sort_th(cols["dateiname"]) }}
+          <th>Lieferant / Kunde</th>
+          {{ sort_th(cols["auftrag"]) }}
+          {{ sort_th(cols["status"]) }}
+          {{ sort_th(cols["confidence"]) }}
+          {{ sort_th(cols["datum"]) }}
+          <th class="col-actions">Aktionen</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for vr in view_rows %}
+        {% set entry = vr.entry %}
+        <tr>
+          <td>
+            {% if entry.row.file_exists %}
+            <a class="cell-primary" href="/zuordnung/pruefen?doc={{ entry.row.path|urlencode }}" title="{{ entry.row.filename }}">{{ entry.row.filename }}</a>
+            {% else %}
+            <span class="cell-primary" title="{{ entry.row.filename }}">{{ entry.row.filename }}</span>
+            {% endif %}
+          </td>
+          <td title="{{ entry.row.partner_name or '' }}">{{ entry.row.partner_name or "–" }}</td>
+          <td>
+            {% if entry.order %}
+              <a href="/auftrag/details?erf_nr={{ entry.order.erf_nr|urlencode }}">{{ entry.order.erf_nr }}</a>
+            {% elif entry.row.candidate_erf_nr %}
+              {{ entry.row.candidate_erf_nr }} <span class="hint-text">(nicht gefunden)</span>
+            {% else %}
+              –
+            {% endif %}
+          </td>
+          <td>{{ status_badge(entry.row) }}</td>
+          <td>{{ confidence_badge(entry.row) }}</td>
+          <td>{{ entry.row.received_at|de_date }}</td>
+          <td>
+            <div class="action-btns">
+              {% if entry.row.file_exists %}
+                {% if entry.row.status == "Bestätigt" %}
+                <a class="btn btn-primary btn-small" href="/zuordnung/pruefen?doc={{ entry.row.path|urlencode }}">Bearbeiten</a>
+                {% else %}
+                <a class="btn btn-secondary btn-small" href="/zuordnung/pruefen?doc={{ entry.row.path|urlencode }}">Prüfen</a>
+                {% endif %}
+              {% endif %}
+              <form method="post" action="/dokument/loeschen" class="inline-form"
+                    data-confirm="Dokument inkl. Datei wirklich unwiderruflich löschen?"
+                    data-confirm-title="Dokument löschen"
+                    data-confirm-ok="Löschen"
+                    data-confirm-danger>
+                <input type="hidden" name="doc" value="{{ entry.row.path }}">
+                <input type="hidden" name="next" value="/dokumente">
+                <button class="btn btn-danger btn-small" type="submit">Löschen</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="empty-cell">
+            {{ empty_message }}
+            {% if not status_filter and not search_query and not von and not bis %}<br><a href="/">Dokumente importieren →</a>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if show_pagination %}
+  <div class="pagination">
+    {% for link in page_links %}
+    <a class="page-link {{ 'is-active' if link.active else '' }}" href="{{ link.href }}">{{ link.page }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

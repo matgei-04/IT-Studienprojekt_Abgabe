@@ -1,0 +1,68 @@
+{% macro confidence_badge(item) -%}
+<span class="badge badge--{{ item.confidence_class }}">{{ item.confidence_label }}</span>
+{%- endmacro %}
+
+{% macro status_badge(row) -%}
+  {% if row.status == "Bestätigt" %}
+    <span class="badge badge--success">Bestätigt</span>
+  {% elif row.status == "Prüfung erforderlich" %}
+    <span class="badge badge--warning">Prüfung erforderlich</span>
+  {% else %}
+    <span class="badge badge--danger">{{ row.status }}</span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro order_status_badge(status) -%}
+  {% if status == "Vollständig" %}
+    <span class="badge badge--success">Vollständig</span>
+  {% elif status == "Prüfung erforderlich" %}
+    <span class="badge badge--warning">Prüfung erforderlich</span>
+  {% else %}
+    <span class="badge badge--neutral">Ohne Dokumente</span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro sort_th(col) -%}
+<th>
+  <a class="sort-link {{ 'is-active' if col.active else '' }}" href="{{ col.href }}">
+    {{ col.label }}
+    {% if col.active %}<span class="sort-arrow">{{ '▲' if col.direction == 'asc' else '▼' }}</span>{% endif %}
+  </a>
+</th>
+{%- endmacro %}
+
+{% macro review_table(items, cols, empty_message, view_all_href=None) -%}
+<div class="table-scroll">
+  <table class="data-table">
+    <thead>
+      <tr>
+        {{ sort_th(cols["document"]) }}
+        {{ sort_th(cols["date"]) }}
+        <th>Lieferant / Kunde</th>
+        {{ sort_th(cols["order"]) }}
+        {{ sort_th(cols["confidence"]) }}
+        <th>Aktion</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td class="cell-primary">{{ item.filename }}</td>
+        <td>{{ item.received_at|de_date }}</td>
+        <td>{{ item.partner_name or "–" }}</td>
+        <td>{{ item.candidate_erf_nr or "–" }}</td>
+        <td>{{ confidence_badge(item) }}</td>
+        <td><a class="btn btn-secondary btn-small" href="/zuordnung/pruefen?doc={{ item.path|urlencode }}">Prüfen</a></td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="6" class="empty-cell">{{ empty_message }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if view_all_href %}
+<a class="view-all-link" href="{{ view_all_href }}">Alle anzeigen →</a>
+{% endif %}
+{%- endmacro %}

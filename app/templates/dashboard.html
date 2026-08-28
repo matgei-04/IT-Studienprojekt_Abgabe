@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% from "_macros.html" import review_table %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Übersicht</h1>
+    <p class="page-subtitle">Belege importieren und Zuordnungen prüfen.</p>
+  </div>
+  <form method="post" action="/zuordnung/erneut">
+    <input type="hidden" name="next" value="/">
+    <button class="btn btn-secondary" type="submit">Zuordnung erneut ausführen</button>
+  </form>
+</div>
+
+{% if notice == "started" %}
+<div class="banner banner--success">Zuordnungsdurchlauf gestartet. Offene Belege werden neu gelesen und abgeglichen.</div>
+{% elif notice == "busy" %}
+<div class="banner banner--warning">Ein Durchlauf läuft bereits. Bitte kurz warten und die Seite neu laden.</div>
+{% endif %}
+{% if warning %}
+<div class="banner banner--warning">{{ warning }}</div>
+{% endif %}
+
+<div class="kpi-grid">
+  <a class="kpi-card" href="/dokumente">
+    <span class="kpi-label">Dokumente</span>
+    <span class="kpi-value">{{ kpis.neu }}</span>
+  </a>
+  <a class="kpi-card" href="/dokumente?status=bestaetigt">
+    <span class="kpi-label">Zugeordnet</span>
+    <span class="kpi-value kpi-value--success">{{ kpis.automatisch }}</span>
+  </a>
+  <a class="kpi-card" href="/dokumente?status=pruefung">
+    <span class="kpi-label">Prüfung erforderlich</span>
+    <span class="kpi-value kpi-value--warning">{{ kpis.pruefung }}</span>
+  </a>
+  <a class="kpi-card" href="/dokumente?status=nicht_zuordenbar">
+    <span class="kpi-label">Keine Zuordnung</span>
+    <span class="kpi-value kpi-value--danger">{{ kpis.nicht_zuordenbar }}</span>
+  </a>
+</div>
+
+<section class="card upload-card">
+  <div id="drop-zone" class="drop-zone">
+    <p class="drop-zone-text">PDFs und Fotos hier ablegen oder <label for="file-input" class="drop-zone-link">Dateien auswählen</label></p>
+    <div class="drop-zone-actions">
+      <button type="button" class="btn btn-primary" onclick="document.getElementById('file-input').click()">Dateien auswählen</button>
+      <button type="button" class="btn btn-secondary" onclick="document.getElementById('folder-input').click()">Ordner importieren</button>
+    </div>
+    <input type="file" id="file-input" accept="{{ file_accept }}" multiple hidden>
+    <input type="file" id="folder-input" webkitdirectory multiple hidden>
+  </div>
+  <ul id="upload-results" class="upload-results"></ul>
+</section>
+
+<div class="dashboard-grid dashboard-grid--overview">
+  <section class="card dashboard-panel dashboard-panel--docs">
+    <div class="card-header">
+      <h2>Dokumentenzuordnung</h2>
+    </div>
+    <div class="dashboard-panel-body">
+      {{ review_table(items, cols, "Aktuell keine offenen Dokumente.", view_all_href="/dokumente") }}
+    </div>
+  </section>
+
+  <section class="card dashboard-panel">
+    <div class="card-header">
+      <h2>Letzte Aktivitäten</h2>
+    </div>
+    <div class="dashboard-panel-body">
+      {% if recent_events %}
+      <ul class="activity-list">
+        {% for ts, label in recent_events %}
+        <li class="activity-item">
+          <span class="activity-time">{{ ts|de_datetime }}</span>
+          <span class="activity-label">{{ label }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="empty-state">Keine Aktivitätshistorie verfügbar.</p>
+      {% endif %}
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  const dropZone = document.getElementById('drop-zone');
+  const fileInput = document.getElementById('file-input');
+  const folderInput = document.getElementById('folder-input');
+  const resultsList = document.getElementById('upload-results');
+
+  const ACCEPTED_EXT = {{ file_extensions_json | safe }};
+
+  function addResult(text, ok) {
+    const li = document.createElement('li');
+    li.className = ok ? 'upload-result upload-result--ok' : 'upload-result upload-result--error';
+    li.textContent = text;
+    resultsList.appendChild(li);
+  }
+
+  function isAccepted(name) {
+    const lower = name.toLowerCase();
+    return ACCEPTED_EXT.some((ext) => lower.endsWith(ext));
+  }
+
+  async function uploadOne(file) {
+    if (!isAccepted(file.name)) {
+      addResult(`${file.name}: Nur PDF, PNG, JPG, WebP und TIFF werden unterstützt.`, false);
+      return false;
+    }
+    if (file.size === 0) {
+      addResult(`${file.name}: Datei ist leer.`, false);
+      return false;
+    }
+    try {
+      const response = await fetch('/eingang/upload?filename=' + encodeURIComponent(file.name), {
+        method: 'POST',
+        body: file,
+      });
+      const result = await response.json();
+      if (result.skipped) {
+        addResult(`${file.name}: bereits importiert.`, true);
+        return "skipped";
+      }
+      if (result.ok) {
+        addResult(`${result.filename}: importiert – ${result.status} (${result.confidence}%)`, true);
+        return true;
+      }
+      addResult(result.error || `${file.name}: Import fehlgeschlagen.`, false);
+      return false;
+    } catch (err) {
+      addResult(`${file.name}: Verbindungsfehler beim Import.`, false);
+      return false;
+    }
+  }
+
+  async function uploadFiles(fileList) {
+    resultsList.innerHTML = '';
+    const files = Array.from(fileList).filter((f) => isAccepted(f.name));
+    if (files.length === 0) {
+      addResult('Keine unterstützten Dateien (PDF, PNG, JPG, WebP, TIFF) in der Auswahl gefunden.', false);
+      return;
+    }
+    let importedCount = 0;
+    let failed = false;
+    for (const file of files) {
+      const outcome = await uploadOne(file);
+      if (outcome === true) importedCount += 1;
+      else if (outcome === false) failed = true;
+    }
+    if (!failed && importedCount > 0) {
+      setTimeout(() => window.location.reload(), 1200);
+    }
+  }
+
+  fileInput.addEventListener('change', (e) => uploadFiles(e.target.files));
+  folderInput.addEventListener('change', (e) => uploadFiles(e.target.files));
+
+  ['dragenter', 'dragover'].forEach((evt) =>
+    dropZone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      dropZone.classList.add('is-dragover');
+    })
+  );
+  ['dragleave', 'drop'].forEach((evt) =>
+    dropZone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('is-dragover');
+    })
+  );
+  dropZone.addEventListener('drop', (e) => {
+    if (e.dataTransfer && e.dataTransfer.files.length) {
+      uploadFiles(e.dataTransfer.files);
+    }
+  });
+})();
+</script>
+{% endblock %}

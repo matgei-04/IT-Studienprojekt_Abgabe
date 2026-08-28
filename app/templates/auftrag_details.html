@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% from "_macros.html" import confidence_badge, status_badge, order_status_badge %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Auftrag {{ summary.order.erf_nr }}</h1>
+    <p class="page-subtitle">{{ summary.order.kunde or "Kein Kunde erkannt" }}</p>
+  </div>
+  <a class="btn btn-secondary" href="/auftraege">← Zurück zur Liste</a>
+</div>
+
+{% if warning %}
+<div class="banner banner--warning">{{ warning }}</div>
+{% endif %}
+
+<div class="dashboard-grid dashboard-grid--equal order-detail-grid">
+  <section class="card">
+    <div class="card-header"><h2>Auftragsdaten</h2></div>
+    <dl class="detail-list">
+      <dt>Auftragsnummer</dt><dd>{{ summary.order.erf_nr }}</dd>
+      <dt>Kunde</dt><dd>{{ summary.order.kunde or "–" }}</dd>
+      <dt>Beschreibung</dt><dd>{{ summary.order.beschreibung or "–" }}</dd>
+      <dt>Erstellungsdatum</dt><dd>{{ summary.order.datum_raw or "–" }}</dd>
+      <dt>Status</dt><dd>{{ order_status_badge(summary.status) }}</dd>
+    </dl>
+
+    {% if summary.status == "Prüfung erforderlich" %}
+    <p class="hint-text">
+      <a href="/dokumente?status=pruefung&q={{ summary.order.erf_nr|urlencode }}">Alle offenen Zuordnungen zu diesem Auftrag ansehen →</a>
+    </p>
+    {% endif %}
+  </section>
+
+  <div class="side-column">
+    {% if events %}
+    <section class="card">
+      <div class="card-header"><h2>Ereignisse</h2></div>
+      <ul class="event-list">
+        {% for timestamp, text in events %}
+        <li><span>{{ text }}</span><span class="event-time">{{ timestamp|de_datetime }}</span></li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+  </div>
+</div>
+
+<section class="card documents-card">
+  <div class="card-header"><h2>Dokumente ({{ summary.document_count }})</h2></div>
+  {% if summary.documents %}
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Dokument</th>
+          <th>Sicherheit</th>
+          <th>Status</th>
+          <th>Aktion</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for doc in summary.documents %}
+        <tr>
+          <td>
+            <div class="cell-primary">{{ doc.filename }}</div>
+          </td>
+          <td>{{ confidence_badge(doc) }}</td>
+          <td>{{ status_badge(doc) }}</td>
+          <td>
+            {% if doc.file_exists %}
+              <a class="btn {{ 'btn-primary' if doc.status == 'Bestätigt' else 'btn-secondary' }} btn-small" href="/zuordnung/pruefen?doc={{ doc.path|urlencode }}">
+                {{ "Bearbeiten" if doc.status == "Bestätigt" else "Prüfen" }}
+              </a>
+            {% else %}
+              <span class="hint-text">Nicht verfügbar</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty-state">Diesem Auftrag ist bisher noch kein Dokument zugeordnet oder vorgeschlagen.</p>
+  {% endif %}
+</section>
+{% endblock %}

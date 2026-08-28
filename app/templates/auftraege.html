@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% from "_macros.html" import sort_th, order_status_badge %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Aufträge</h1>
+    <p class="page-subtitle">Aufträge und zugehörige Dokumente.</p>
+  </div>
+</div>
+
+{% if warning %}
+<div class="banner banner--warning">{{ warning }}</div>
+{% endif %}
+
+<form class="filters-form" method="get">
+  <input type="search" name="q" value="{{ search_query or '' }}" placeholder="Auftragsnummer, Kunde oder Beschreibung suchen">
+  <select name="status">
+    <option value="">Alle Status</option>
+    <option value="Vollständig" {{ "selected" if status_filter == "Vollständig" else "" }}>Vollständig</option>
+    <option value="Prüfung erforderlich" {{ "selected" if status_filter == "Prüfung erforderlich" else "" }}>Prüfung erforderlich</option>
+    <option value="Ohne Dokumente" {{ "selected" if status_filter == "Ohne Dokumente" else "" }}>Ohne Dokumente</option>
+  </select>
+  <input type="date" name="von" value="{{ von }}">
+  <span class="date-sep">bis</span>
+  <input type="date" name="bis" value="{{ bis }}">
+  {% if kunden_options %}
+  <select name="kunde">
+    <option value="">Alle Kunden</option>
+    {% for k in kunden_options %}
+    <option value="{{ k }}" {{ "selected" if kunde_filter == k else "" }}>{{ k }}</option>
+    {% endfor %}
+  </select>
+  {% endif %}
+  <button class="btn btn-primary btn-small" type="submit">Filtern</button>
+  {% if status_filter or kunde_filter or search_query or von or bis %}
+  <a class="btn btn-secondary btn-small" href="/auftraege">Zurücksetzen</a>
+  {% endif %}
+</form>
+
+<section class="card">
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr>
+          {{ sort_th(cols["erf_nr"]) }}
+          {{ sort_th(cols["kunde"]) }}
+          <th>Beschreibung</th>
+          {{ sort_th(cols["status"]) }}
+          {{ sort_th(cols["dokumente"]) }}
+          {{ sort_th(cols["datum"]) }}
+          <th>Aktion</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in summaries %}
+        <tr>
+          <td><a class="cell-primary" href="/auftrag/details?erf_nr={{ s.order.erf_nr|urlencode }}">{{ s.order.erf_nr }}</a></td>
+          <td>{{ s.order.kunde or "–" }}</td>
+          <td>{{ s.order.beschreibung or "–" }}</td>
+          <td>{{ order_status_badge(s.status) }}</td>
+          <td>{{ s.document_count }}</td>
+          <td>{{ s.order.datum_raw or "–" }}</td>
+          <td><a class="btn btn-secondary btn-small" href="/auftrag/details?erf_nr={{ s.order.erf_nr|urlencode }}">Details</a></td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="empty-cell">{{ empty_message }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if show_pagination %}
+  <div class="pagination">
+    {% for link in page_links %}
+    <a class="page-link {{ 'is-active' if link.active else '' }}" href="{{ link.href }}">{{ link.page }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

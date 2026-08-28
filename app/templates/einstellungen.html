@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Einstellungen</h1>
+    <p class="page-subtitle">Datenquellen, Verarbeitung und Erkennungslabels anpassen.</p>
+  </div>
+</div>
+
+{% if warning %}
+<div class="banner banner--warning">{{ warning }}</div>
+{% endif %}
+
+<div class="settings-layout">
+  <nav class="settings-nav">
+    <a class="settings-nav-item {{ 'is-active' if tab == 'datenquellen' else '' }}" href="/einstellungen?tab=datenquellen">Datenquellen</a>
+    <a class="settings-nav-item {{ 'is-active' if tab == 'verarbeitung' else '' }}" href="/einstellungen?tab=verarbeitung">Verarbeitung</a>
+    <a class="settings-nav-item {{ 'is-active' if tab == 'labels' else '' }}" href="/einstellungen?tab=labels">Labels</a>
+  </nav>
+
+  <div class="settings-content">
+    {% if tab == 'datenquellen' %}
+      {% if conn_msg %}
+      <div class="banner {{ 'banner--success' if conn_ok == '1' else 'banner--danger' }}">{{ conn_msg }}</div>
+      {% endif %}
+      {% if saved %}<div class="banner banner--success">Einstellungen wurden gespeichert.</div>{% endif %}
+      {% if save_error %}<div class="banner banner--danger">{{ save_error }}</div>{% endif %}
+
+      <section class="card">
+        <div class="card-header"><h2>Datenquellen</h2></div>
+        <ul class="datasource-list">
+          {% for ds in datasources %}
+          <li class="datasource-row">
+            <div class="datasource-main">
+              <div class="datasource-name">{{ ds.name }}</div>
+              <div class="datasource-desc">{{ ds.beschreibung }}</div>
+            </div>
+            {% if ds.show_status %}
+            <span class="badge badge--{{ ds.status_class }}">{{ ds.status }}</span>
+            {% endif %}
+            <div class="datasource-action">
+              {% if ds.check_action %}
+              <form method="post" action="/einstellungen/verbindung-pruefen">
+                <button class="btn btn-secondary btn-small" type="submit">Verbindung prüfen</button>
+              </form>
+              {% elif ds.link_href %}
+              <a class="btn btn-secondary btn-small" href="{{ ds.link_href }}">{{ ds.link_label }}</a>
+              {% endif %}
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      </section>
+
+      <section class="card">
+        <div class="card-header"><h2>Import-Ordner</h2></div>
+        <form method="post" action="/einstellungen/ordner" class="settings-form">
+          <label class="field-label" for="scan_ordner">Ordner, aus dem Dokumente automatisch importiert werden</label>
+          <input class="text-input" type="text" id="scan_ordner" name="scan_ordner"
+                 value="{{ einstellungen.scan_ordner or '' }}" placeholder="z. B. C:\Belege\Eingang">
+          <p class="hint-text">Leer lassen, um wieder SCAN_DIRECTORY aus der .env zu verwenden. Der Ordner muss bereits vorhanden sein; bereits importierte Dokumente werden durch eine Änderung nicht rückwirkend verschoben.</p>
+          <button class="btn btn-primary" type="submit">Änderungen speichern</button>
+        </form>
+      </section>
+
+    {% elif tab == 'verarbeitung' %}
+      {% if saved %}<div class="banner banner--success">Einstellungen wurden gespeichert.</div>{% endif %}
+      {% if save_error %}<div class="banner banner--danger">{{ save_error }}</div>{% endif %}
+
+      <section class="card">
+        <div class="card-header"><h2>Automatische Verarbeitung</h2></div>
+        <form method="post" action="/einstellungen/verarbeitung" class="settings-form">
+          <label class="toggle-row">
+            <input type="checkbox" name="ocr_aktiv" {{ "checked" if einstellungen.ocr_aktiv else "" }}>
+            <span>
+              <strong>OCR nach Import starten</strong>
+              <span class="hint-text">Texterkennung für gescannte bzw. textarme PDFs und für Fotos (PNG, JPG, WebP, TIFF). Ist diese Option deaktiviert, wird bei neuen Importen kein OCR mehr ausgeführt. Bei PDFs wird dann nur noch eingebetteter Text gelesen; Fotos bleiben ohne Text.</span>
+            </span>
+          </label>
+
+          <label class="toggle-row">
+            <input type="checkbox" name="matching_aktiv" {{ "checked" if einstellungen.matching_aktiv else "" }}>
+            <span>
+              <strong>Matching-Vorschlag nach erfolgreicher Textextraktion erstellen</strong>
+              <span class="hint-text">Ist diese Option deaktiviert, wird nach dem Import kein Auftragsvorschlag mehr berechnet; Dokumente erscheinen dann als „Matching deaktiviert“.</span>
+            </span>
+          </label>
+
+          <p class="hint-text">Bereits importierte Dokumente werden durch eine Änderung nicht rückwirkend neu verarbeitet.</p>
+
+          <button class="btn btn-primary" type="submit">Änderungen speichern</button>
+        </form>
+      </section>
+
+    {% elif tab == 'labels' %}
+      {% if saved %}<div class="banner banner--success">Labels wurden gespeichert.</div>{% endif %}
+      {% if save_error %}<div class="banner banner--danger">{{ save_error }}</div>{% endif %}
+
+      <section class="card">
+        <div class="card-header"><h2>Auftragsnummer</h2></div>
+        <p class="hint-text labels-intro">
+          Ein Label pro Zeile. Die App sucht im Belegtext nach diesen Begriffen und liest
+          die Nummer direkt dahinter.
+          Änderungen gelten für neu verarbeitete Dokumente – bereits gespeicherte Ergebnisse bleiben unverändert.
+        </p>
+
+        <form method="post" action="/einstellungen/labels" class="settings-form labels-form">
+          <div class="label-field">
+            <label class="field-label" for="order_labels">Begriffe, die direkt vor der Nummer stehen</label>
+            <p class="hint-text">z.&nbsp;B. ErfNr, Auftrags-Nr., Auftrag</p>
+            <textarea class="text-input label-textarea" id="order_labels" name="order_labels" rows="12"
+                      spellcheck="false">{{ order_labels_text }}</textarea>
+          </div>
+
+          <div class="label-actions">
+            <button class="btn btn-primary" type="submit">Labels speichern</button>
+            <button class="btn btn-secondary" type="submit" name="reset" value="1"
+                    data-confirm="Wirklich auf die Standard-Labels zurücksetzen?"
+                    data-confirm-title="Labels zurücksetzen"
+                    data-confirm-ok="Zurücksetzen">Standard wiederherstellen</button>
+          </div>
+        </form>
+      </section>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no">
+<title>SmartAssign</title>
+<link rel="stylesheet" href="/static/style.css">
+<script>
+  // Desktop-Fenster: 100% Zoom, kein horizontales Verschieben der Seite.
+  (function () {
+    try {
+      document.documentElement.style.zoom = "1";
+      document.addEventListener("gesturestart", function (e) { e.preventDefault(); }, { passive: false });
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", function () {
+          document.documentElement.style.zoom = "1";
+        });
+      }
+    } catch (e) {}
+  })();
+</script>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">SmartAssign</div>
+    <nav class="sidebar-nav">
+      {% for item in nav_items %}
+      <a class="nav-item {{ 'is-active' if item.key == active_key else '' }}" href="{{ item.path }}">
+        <span class="nav-icon">{{ item.icon|safe }}</span>
+        <span class="nav-label">{{ item.label }}</span>
+      </a>
+      {% endfor %}
+    </nav>
+    <div class="sidebar-bottom">
+      <a class="nav-item {{ 'is-active' if settings_item.key == active_key else '' }}" href="{{ settings_item.path }}">
+        <span class="nav-icon">{{ settings_item.icon|safe }}</span>
+        <span class="nav-label">{{ settings_item.label }}</span>
+      </a>
+    </div>
+  </aside>
+
+  <main class="main">
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+<dialog class="sa-dialog" id="sa-confirm-dialog" aria-labelledby="sa-confirm-title">
+  <form method="dialog" class="sa-dialog-panel">
+    <h2 class="sa-dialog-title" id="sa-confirm-title">Bestätigen</h2>
+    <p class="sa-dialog-message" id="sa-confirm-message"></p>
+    <div class="sa-dialog-actions">
+      <button class="btn btn-secondary" type="submit" value="cancel" id="sa-confirm-cancel">Abbrechen</button>
+      <button class="btn btn-primary" type="submit" value="ok" id="sa-confirm-ok">Bestätigen</button>
+    </div>
+  </form>
+</dialog>
+<script>
+(function () {
+  const dialog = document.getElementById("sa-confirm-dialog");
+  const msgEl = document.getElementById("sa-confirm-message");
+  const titleEl = document.getElementById("sa-confirm-title");
+  const okBtn = document.getElementById("sa-confirm-ok");
+  const cancelBtn = document.getElementById("sa-confirm-cancel");
+  if (!dialog) return;
+
+  function saConfirm(message, options) {
+    const opts = options || {};
+    titleEl.textContent = opts.title || "Bestätigen";
+    msgEl.textContent = message || "";
+    okBtn.textContent = opts.confirmLabel || "Bestätigen";
+    cancelBtn.textContent = opts.cancelLabel || "Abbrechen";
+    okBtn.className = "btn " + (opts.danger ? "btn-danger" : "btn-primary");
+    dialog.showModal();
+    return new Promise(function (resolve) {
+      function onClose() {
+        dialog.removeEventListener("close", onClose);
+        resolve(dialog.returnValue === "ok");
+      }
+      dialog.addEventListener("close", onClose);
+    });
+  }
+
+  window.saConfirm = saConfirm;
+
+  document.addEventListener("submit", function (e) {
+    const form = e.target;
+    if (!(form instanceof HTMLFormElement)) return;
+    const message = form.getAttribute("data-confirm");
+    if (!message || form.dataset.saConfirmed === "1") return;
+    e.preventDefault();
+    saConfirm(message, {
+      title: form.getAttribute("data-confirm-title") || "Bestätigen",
+      confirmLabel: form.getAttribute("data-confirm-ok") || "Bestätigen",
+      danger: form.hasAttribute("data-confirm-danger"),
+    }).then(function (ok) {
+      if (!ok) return;
+      form.dataset.saConfirmed = "1";
+      if (typeof form.requestSubmit === "function") form.requestSubmit();
+      else form.submit();
+    });
+  }, true);
+})();
+</script>
+</body>
+</html>
